@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "upstreams": {
+    "t3": {
+      "repository": "pingdotgg/t3code",
+      "branch": "main",
+      "integratedCommit": "d720210996a514368ba99f4860063110033d93fa",
+      "releasePattern": "^v[0-9].*-nightly\\."
+    },
+    "zeron": {
+      "repository": "zeronsh/zeron",
+      "branch": "main",
+      "integratedCommit": "35db3a9bfa0f696c466d91b329e31bd4b8720afe",
+      "releasePattern": "^v[0-9]"
+    }
+  }
+}

@@ -11,11 +11,16 @@ on:
       - 'native/test_connect_local.py'
       - 'native/test_webkit.py'
       - 'native/test_contracts.py'
+      - 'native/upstream_watch.py'
+      - 'native/upstreams.json'
+      - 'native/test_upstream_watch.py'
+      - 'native/prepare_maintenance.py'
+      - 'native/test_prepare_maintenance.py'
       - '.github/workflows/native-t3-linux.yml'
   workflow_dispatch:
     inputs:
       check_upstream:
-        description: Build against current upstream T3
+        description: Check the current T3 nightly API and track Zeron changes
         type: boolean
         default: false
   schedule:
@@ -43,13 +48,46 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
-      - name: Check current upstream without changing the release branch
-        if: github.event_name == 'schedule' || inputs.check_upstream
+      - name: Identify runtime changes for publication
+        id: release_scope
+        if: github.event_name == 'push'
+        env:
+          BEFORE_SHA: ${{ github.event.before }}
         run: |
-          git config user.name 'Z3-code CI'
-          git config user.email 'ci@users.noreply.github.com'
-          git fetch https://github.com/pingdotgg/t3code.git main
-          git merge --no-edit FETCH_HEAD
+          if [ "$BEFORE_SHA" = '0000000000000000000000000000000000000000' ]; then
+            printf 'changed=true\n' >> "$GITHUB_OUTPUT"
+          elif git -C ../.. diff --quiet "$BEFORE_SHA" "$GITHUB_SHA" -- native/zeron native/launch-t3 native/connect-local.py; then
+            printf 'changed=false\n' >> "$GITHUB_OUTPUT"
+          else
+            printf 'changed=true\n' >> "$GITHUB_OUTPUT"
+          fi
+      - name: Upstream tracking and maintenance tests
+        run: python3 -m unittest discover -s .. -p 'test_*maintenance.py' -v && python3 -m unittest discover -s .. -p test_upstream_watch.py -v
+      - name: Track T3 nightly and Zeron releases
+        id: upstreams
+        if: github.event_name == 'schedule' || inputs.check_upstream
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          python3 ../upstream_watch.py --output-dir "$RUNNER_TEMP/z3-upstreams" --github-output "$GITHUB_OUTPUT"
+          cat "$RUNNER_TEMP/z3-upstreams/upstreams.md" >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always() && (github.event_name == 'schedule' || inputs.check_upstream)
+        with:
+          name: z3-upstream-report
+          path: ${{ runner.temp }}/z3-upstreams/
+          retention-days: 30
+          if-no-files-found: warn
+      - name: Check the exact nightly contracts without merging unrelated client changes
+        if: github.event_name == 'schedule' || inputs.check_upstream
+        env:
+          UPSTREAM_SHA: ${{ steps.upstreams.outputs.t3_sha }}
+        run: |
+          test -n "$UPSTREAM_SHA"
+          git fetch --no-tags https://github.com/pingdotgg/t3code.git "$UPSTREAM_SHA"
+          mkdir -p "$RUNNER_TEMP/t3-contracts"
+          git -C ../.. archive FETCH_HEAD packages/contracts/src | tar -x -C "$RUNNER_TEMP/t3-contracts"
+          printf 'ZERON_T3_CONTRACTS_ROOT=%s\n' "$RUNNER_TEMP/t3-contracts" >> "$GITHUB_ENV"
 
       - name: Local connection tests
         run: python3 -m unittest discover -s .. -p test_connect_local.py -v
@@ -148,7 +186,7 @@ jobs:
           retention-days: 14
           if-no-files-found: error
       - name: Publish tested Linux download
-        if: github.event_name == 'push' && github.ref == 'refs/heads/feat/native-zeron'
+        if: github.event_name == 'push' && github.ref == 'refs/heads/feat/native-zeron' && steps.release_scope.outputs.changed == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |

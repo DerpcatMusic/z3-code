@@ -1,6 +1,7 @@
 """Catch removed T3 RPCs before building the native client."""
 import re
 import unittest
+import os
 from pathlib import Path
 
 
@@ -19,8 +20,9 @@ class ContractTests(unittest.TestCase):
 
     def test_adapter_calls_are_registered_in_the_current_backend(self):
         root = Path(__file__).resolve().parents[1]
-        source = (root / "packages/contracts/src/rpc.ts").read_text()
-        source += (root / "packages/contracts/src/orchestrationV2.ts").read_text()
+        contract_root = Path(os.environ.get("ZERON_T3_CONTRACTS_ROOT", root))
+        source = (contract_root / "packages/contracts/src/rpc.ts").read_text()
+        source += (contract_root / "packages/contracts/src/orchestrationV2.ts").read_text()
         methods = registered_methods(source)
         self.assertGreater(len(methods), 50, "RPC declarations changed; update the contract check")
         calls = set()
@@ -29,7 +31,7 @@ class ContractTests(unittest.TestCase):
             calls.update(re.findall(r'\.(?:call|subscribe_checked|subscribe)\(\s*"([^"]+)"', source))
         self.assertGreater(len(calls), 10, "Adapter call syntax changed; update the contract check")
         self.assertFalse(calls - methods, f"Native adapter calls removed T3 RPCs: {sorted(calls - methods)}")
-        http = (root / "packages/contracts/src/environmentHttp.ts").read_text()
+        http = (contract_root / "packages/contracts/src/environmentHttp.ts").read_text()
         for route in ("/api/projects", "/api/projects/mutate", "/api/auth/session"):
             self.assertIn(f'"{route}"', http)
 
