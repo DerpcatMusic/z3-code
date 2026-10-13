@@ -349,6 +349,12 @@ import {
 } from "./scheduledTask.ts";
 import { SecretRequestAnswerInput, SecretRequestError } from "./secretRequest.ts";
 import {
+  ClaudeSurfaceError,
+  ClaudeSurfaceEvent,
+  ClaudeSurfaceRequestInput,
+  ClaudeSurfaceSubscribeInput,
+} from "./claudeSurface.ts";
+import {
   ProjectCloneActionInput,
   ProjectCloneActionResult,
   ProjectCloneListEvent,
@@ -520,6 +526,8 @@ export const WS_METHODS = {
   scheduledTasksRunNow: "scheduledTasks.runNow",
   scheduledTasksRotateWebhookToken: "scheduledTasks.rotateWebhookToken",
   secretsAnswerRequest: "secrets.answerRequest",
+  claudeSurfaceRequest: "claudeSurface.request",
+  claudeSurfaceSubscribe: "claudeSurface.subscribe",
   scheduledTasksListWebhookDeliveries: "scheduledTasks.listWebhookDeliveries",
   scheduledTasksGetWebhookDelivery: "scheduledTasks.getWebhookDelivery",
 
@@ -1826,6 +1834,19 @@ const WsSecretsAnswerRequestRpc = Rpc.make(WS_METHODS.secretsAnswerRequest, {
   error: Schema.Union([SecretRequestError, EnvironmentAuthorizationError]),
 });
 
+const WsClaudeSurfaceRequestRpc = Rpc.make(WS_METHODS.claudeSurfaceRequest, {
+  payload: ClaudeSurfaceRequestInput,
+  success: Schema.Unknown,
+  error: Schema.Union([ClaudeSurfaceError, EnvironmentAuthorizationError]),
+});
+
+const WsClaudeSurfaceSubscribeRpc = Rpc.make(WS_METHODS.claudeSurfaceSubscribe, {
+  payload: ClaudeSurfaceSubscribeInput,
+  success: ClaudeSurfaceEvent,
+  error: EnvironmentAuthorizationError,
+  stream: true,
+});
+
 const WsScheduledTasksListWebhookDeliveriesRpc = Rpc.make(
   WS_METHODS.scheduledTasksListWebhookDeliveries,
   {
@@ -1934,6 +1955,8 @@ export const WsRpcGroup = RpcGroup.make(
   WsScheduledTasksRunNowRpc,
   WsScheduledTasksRotateWebhookTokenRpc,
   WsSecretsAnswerRequestRpc,
+  WsClaudeSurfaceRequestRpc,
+  WsClaudeSurfaceSubscribeRpc,
   WsScheduledTasksListWebhookDeliveriesRpc,
   WsScheduledTasksGetWebhookDeliveryRpc,
   WsServerReportClientActivityRpc,

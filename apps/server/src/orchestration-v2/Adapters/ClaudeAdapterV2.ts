@@ -124,6 +124,7 @@ import {
   boundProviderEventForLogging,
   shouldPersistProviderEvent,
 } from "../../provider/EventNdjsonLogger.ts";
+import * as ClaudeSurfaceRelay from "../ClaudeSurfaceRelay.ts";
 import * as ProviderEventLoggers from "@t3tools/provider-core/server/ProviderEventLoggers";
 import {
   claudeRateLimitEventToUpdate,
@@ -661,6 +662,7 @@ export const layerQueryRunner: Layer.Layer<
     const crypto = yield* Crypto.Crypto;
     const { native: nativeEventLogger } = yield* ProviderEventLoggers.ProviderEventLoggers;
     const agentScope = yield* AgentScope;
+    const surfaceRelay = yield* ClaudeSurfaceRelay.ClaudeSurfaceRelay;
 
     return ClaudeAgentSdkQueryRunner.of({
       allocateSessionId: crypto.randomUUIDv4.pipe(
@@ -771,6 +773,15 @@ export const layerQueryRunner: Layer.Layer<
           ),
         );
 
+        // Mods draw through the CLI's remote-surface protocol; clients reach
+        // it by the thread. The SDK's generic control request carries ui_*.
+        const closeSurface = yield* surfaceRelay.open(input.threadId, {
+          request: (request) =>
+            (queryRuntime as unknown as { request(body: unknown): Promise<unknown> }).request(
+              request,
+            ),
+        });
+
         return {
           messages: Stream.fromAsyncIterable(claudeQueryMessages(queryRuntime), (cause) =>
             queryRunnerError(cause, "fromAsyncIterable"),
@@ -781,6 +792,11 @@ export const layerQueryRunner: Layer.Layer<
                 stage: "decoded",
                 payload: message,
               }),
+            ),
+            Stream.tap((message) =>
+              ClaudeSurfaceRelay.isClaudeSurfacePush(message)
+                ? surfaceRelay.publish(input.threadId, message)
+                : Effect.void,
             ),
           ),
           offer: (message) =>
@@ -856,7 +872,8 @@ export const layerQueryRunner: Layer.Layer<
               }),
             ),
           ),
-          close: Queue.shutdown(promptQueue).pipe(
+          close: closeSurface.pipe(
+            Effect.andThen(Queue.shutdown(promptQueue)),
             Effect.andThen(closeClaudeQuery(queryRuntime)),
             Effect.tap(() =>
               logProtocolEvent({

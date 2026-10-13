@@ -1,6 +1,7 @@
 import * as Layer from "effect/Layer";
 
 import * as ClaudeAdapterV2 from "../orchestration-v2/Adapters/ClaudeAdapterV2.ts";
+import * as ClaudeSurfaceRelay from "../orchestration-v2/ClaudeSurfaceRelay.ts";
 import * as CodexAdapterV2 from "../orchestration-v2/Adapters/CodexAdapterV2.ts";
 import * as CursorAgentSdk from "@t3tools/provider-cursor/server/CursorAgentSdk";
 import * as CursorSdk from "@t3tools/provider-cursor/server/CursorSdk";
@@ -23,7 +24,9 @@ export type ProviderOrchestrationAdapterInfrastructure =
  * Effect layer memoization yields one shared queue.
  */
 export const layer = Layer.mergeAll(
-  ClaudeAdapterV2.layerQueryRunner,
+  // Same ClaudeSurfaceRelay layer reference as the server runtime, so the RPC
+  // layer reaches the sessions this runner registers.
+  ClaudeAdapterV2.layerQueryRunner.pipe(Layer.provide(ClaudeSurfaceRelay.layer)),
   CodexAdapterV2.layerAppServerClientFactory,
   CursorAgentSdk.layer.pipe(Layer.provideMerge(CursorSdk.layer)),
   CursorKeychain.layer,
