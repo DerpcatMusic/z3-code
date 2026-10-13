@@ -777,9 +777,14 @@ export const layerQueryRunner: Layer.Layer<
         // it by the thread. The SDK's generic control request carries ui_*.
         const closeSurface = yield* surfaceRelay.open(input.threadId, {
           request: (request) =>
-            (queryRuntime as unknown as { request(body: unknown): Promise<unknown> }).request(
-              request,
-            ),
+            (queryRuntime as unknown as { request(body: unknown): Promise<unknown> })
+              .request(request)
+              // The SDK resolves the whole control_response; clients want its payload.
+              .then((reply) =>
+                typeof reply === "object" && reply !== null && "response" in reply
+                  ? reply.response
+                  : reply,
+              ),
         });
 
         return {
