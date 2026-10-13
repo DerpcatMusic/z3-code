@@ -2098,7 +2098,8 @@ const layerWsRpc = (
           Effect.annotateCurrentSpan({ "orchestration_v2.thread_id": input.threadId }).pipe(
             Effect.andThen(claudeSurfaceRelay.request(input.threadId, input.request)),
           ),
-        [WS_METHODS.claudeSurfaceSubscribe]: (input) => claudeSurfaceRelay.subscribe(input.threadId),
+        [WS_METHODS.claudeSurfaceSubscribe]: (input) =>
+          claudeSurfaceRelay.subscribe(input.threadId),
         [WS_METHODS.scheduledTasksListWebhookDeliveries]: (input) =>
           Effect.annotateCurrentSpan({ "scheduled_task.id": input.id }).pipe(
             Effect.andThen(scheduledTasks.listWebhookDeliveries(input)),

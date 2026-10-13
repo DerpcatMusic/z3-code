@@ -1,10 +1,15 @@
-import { ThreadId } from "@t3tools/contracts";
+import { type ClaudeSurfaceError, ThreadId } from "@t3tools/contracts";
 import { assert, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 import * as Fiber from "effect/Fiber";
 import * as Stream from "effect/Stream";
 
 import * as ClaudeSurfaceRelay from "./ClaudeSurfaceRelay.ts";
+
+const failureReason = <A>(effect: Effect.Effect<A, ClaudeSurfaceError>) =>
+  effect.pipe(
+    Effect.match({ onFailure: (error) => error.reason, onSuccess: () => "succeeded" as const }),
+  );
 
 const thread = ThreadId.make("thread-surface");
 const other = ThreadId.make("thread-other");
@@ -14,8 +19,8 @@ it.effect("relays ui requests to the thread's live session and its pushes to sub
     const relay = yield* ClaudeSurfaceRelay.ClaudeSurfaceRelay;
     const sent: Array<Record<string, unknown>> = [];
 
-    const noSession = yield* relay.request(thread, { subtype: "ui_panes" }).pipe(Effect.flip);
-    assert.equal(noSession.reason, "no_session");
+    const noSession = yield* failureReason(relay.request(thread, { subtype: "ui_panes" }));
+    assert.equal(noSession, "no_session");
 
     const events = yield* relay
       .subscribe(thread)
@@ -29,8 +34,8 @@ it.effect("relays ui requests to the thread's live session and its pushes to sub
 
     assert.deepEqual(yield* relay.request(thread, { subtype: "ui_panes" }), { panes: [] });
     assert.deepEqual(sent, [{ subtype: "ui_panes" }]);
-    const refused = yield* relay.request(thread, { subtype: "interrupt" }).pipe(Effect.flip);
-    assert.equal(refused.reason, "unsupported_request");
+    const refused = yield* failureReason(relay.request(thread, { subtype: "interrupt" }));
+    assert.equal(refused, "unsupported_request");
     assert.equal(sent.length, 1);
 
     yield* relay.publish(other, { type: "system", subtype: "ui_toast", text: "elsewhere" });
@@ -41,8 +46,8 @@ it.effect("relays ui requests to the thread's live session and its pushes to sub
     ]);
 
     yield* close;
-    const closed = yield* relay.request(thread, { subtype: "ui_panes" }).pipe(Effect.flip);
-    assert.equal(closed.reason, "no_session");
+    const closed = yield* failureReason(relay.request(thread, { subtype: "ui_panes" }));
+    assert.equal(closed, "no_session");
   }).pipe(Effect.provide(ClaudeSurfaceRelay.layer)),
 );
 
@@ -50,9 +55,10 @@ it.effect("a closed older session does not unregister its replacement", () =>
   Effect.gen(function* () {
     const relay = yield* ClaudeSurfaceRelay.ClaudeSurfaceRelay;
     const closeFirst = yield* relay.open(thread, { request: async () => "first" });
-    yield* relay.open(thread, { request: async () => "second" });
+    const closeSecond = yield* relay.open(thread, { request: async () => "second" });
     yield* closeFirst;
     assert.equal(yield* relay.request(thread, { subtype: "ui_panes" }), "second");
+    yield* closeSecond;
   }).pipe(Effect.provide(ClaudeSurfaceRelay.layer)),
 );
 
